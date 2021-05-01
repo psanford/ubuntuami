@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	// URL to fetch AMI data from
 	ImagesURL = "http://cloud-images.ubuntu.com/locator/ec2/releasesTable"
 )
 
