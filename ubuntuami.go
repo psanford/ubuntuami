@@ -1,11 +1,10 @@
 package ubuntuami
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -13,7 +12,7 @@ import (
 
 var (
 	// URL to fetch AMI data from
-	ImagesURL = "http://cloud-images.ubuntu.com/locator/ec2/releasesTable"
+	ImagesURL = "https://cloud-images.ubuntu.com/locator/ec2/releasesTable"
 )
 
 type AMI struct {
@@ -48,33 +47,19 @@ func Fetch() ([]AMI, error) {
 // Parse the response from cloud-images releaseTable api.
 func Parse(r io.Reader) ([]AMI, error) {
 	var out []AMI
-	bufReader := bufio.NewReader(r)
-	for i := 0; ; i++ {
-		line, err := bufReader.ReadBytes('\n')
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
 
-		line = bytes.TrimSpace(line)
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
 
-		if !bytes.HasPrefix(line, []byte("[")) || !bytes.HasSuffix(line, []byte("],")) {
-			continue
-		}
+	var aa aaData
+	err = json.Unmarshal(data, &aa)
+	if err != nil {
+		return nil, err
+	}
 
-		line = bytes.TrimSuffix(line, []byte(","))
-
-		var amiData []string
-		err = json.Unmarshal(line, &amiData)
-		if err != nil {
-			return nil, fmt.Errorf("decode json error on line %d: %s", i, err)
-		}
-
-		if got, expect := len(amiData), 8; got != expect {
-			return nil, fmt.Errorf("AMI data with unexpected number of fields %d, expected %d", got, expect)
-		}
-
+	for _, amiData := range aa.AAData {
 		ami := AMI{
 			Region:         amiData[0],
 			ReleaseName:    amiData[1],
@@ -90,8 +75,15 @@ func Parse(r io.Reader) ([]AMI, error) {
 		ami.ID = strings.TrimSuffix(id, "</a>")
 		ami.ReleaseTime, _ = time.Parse("20060102", ami.ReleaseTS)
 
+		ami.ReleaseName = strings.SplitN(strings.ToLower(ami.ReleaseName), " ", 2)[0]
+
 		out = append(out, ami)
 	}
 
 	return out, nil
+}
+
+type aaData struct {
+	AAData  [][]string `json:"aaData"`
+	Updated string     `json:"updated"`
 }
